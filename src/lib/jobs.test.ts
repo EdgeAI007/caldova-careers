@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { sortByNewest, formatPostedDate } from './jobs';
+import { filterJobs, formatPostedDate, getDepartments, getLocations, sortByNewest } from './jobs';
 import type { Job } from '../types/job';
 
-function makeJob(slug: string, postedDate: string): Job {
+function makeJob(slug: string, postedDate: string, overrides: Partial<Job> = {}): Job {
     return {
         slug,
         title: `Role ${slug}`,
@@ -12,6 +12,7 @@ function makeJob(slug: string, postedDate: string): Job {
         remote: true,
         postedDate,
         summary: 'A role.',
+        ...overrides,
     };
 }
 
@@ -40,5 +41,60 @@ describe('formatPostedDate', () => {
 
     it('returns the raw value when the date is unparseable', () => {
         expect(formatPostedDate('not-a-date')).toBe('not-a-date');
+    });
+});
+
+describe('role filtering', () => {
+    const jobs = [
+        makeJob('frontend', '2027-01-01', {
+            department: 'Technology',
+            location: 'Remote',
+        }),
+        makeJob('data', '2027-01-02', {
+            department: 'Technology',
+            location: 'Chicago',
+        }),
+        makeJob('finance', '2027-01-03', {
+            department: 'Finance',
+            location: 'Chicago',
+        }),
+    ];
+
+    it('derives unique department and location options in alphabetical order', () => {
+        expect(getDepartments(jobs)).toEqual(['Finance', 'Technology']);
+        expect(getLocations(jobs)).toEqual(['Chicago', 'Remote']);
+    });
+
+    it('filters by department', () => {
+        expect(filterJobs(jobs, { department: 'Technology' }).map((job) => job.slug)).toEqual([
+            'frontend',
+            'data',
+        ]);
+    });
+
+    it('filters by location', () => {
+        expect(filterJobs(jobs, { location: 'Chicago' }).map((job) => job.slug)).toEqual([
+            'data',
+            'finance',
+        ]);
+    });
+
+    it('requires jobs to match both department and location filters', () => {
+        expect(
+            filterJobs(jobs, { department: 'Technology', location: 'Chicago' }).map(
+                (job) => job.slug,
+            ),
+        ).toEqual(['data']);
+    });
+
+    it('returns no jobs for unmatched filter values', () => {
+        expect(filterJobs(jobs, { department: 'Finance', location: 'Remote' })).toEqual([]);
+    });
+
+    it('returns all jobs when filters are cleared without mutating the input', () => {
+        const original = [...jobs];
+
+        expect(filterJobs(jobs, { department: '', location: '' })).toEqual(jobs);
+        expect(jobs).toEqual(original);
     });
 });
